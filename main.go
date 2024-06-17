@@ -68,9 +68,24 @@ func handleErr(err error, msg string) {
 	}
 }
 
+func handleOutOfLength(i int) {
+	if i < 0 || i >= len(tasks) {
+		err := errors.New("out of index")
+		handleErr(err, "invalid index")
+	}
+}
+
+func handleValidLength(min int) {
+	if l := len(os.Args[1:]); l < min {
+		err := fmt.Errorf("must be at least %d arguments", min)
+		handleErr(err, "invalid arguments")
+	}
+}
+
 var tasks []string
 
 func Create() {
+	handleValidLength(2)
 	task := strings.Join(os.Args[2:], " ")
 	tasks = append(tasks, task)
 
@@ -81,6 +96,7 @@ func Create() {
 }
 
 func GetAll() {
+	handleValidLength(1)
 	for i, task := range tasks {
 		log.Info().
 			Int("index", i).
@@ -90,12 +106,10 @@ func GetAll() {
 }
 
 func Get() {
+	handleValidLength(2)
 	i, err := strconv.Atoi(os.Args[2])
 	handleErr(err, "invalid index")
-	if i < 0 || i >= len(tasks) {
-		err = errors.New("out of index")
-		handleErr(err, "invalid index")
-	}
+	handleOutOfLength(i)
 
 	log.Info().
 		Int("index", i).
@@ -104,12 +118,10 @@ func Get() {
 }
 
 func Update() {
+	handleValidLength(2)
 	i, err := strconv.Atoi(os.Args[2])
 	handleErr(err, "invalid index")
-	if i < 0 || i >= len(tasks) {
-		err = errors.New("out of index")
-		handleErr(err, "invalid index")
-	}
+	handleOutOfLength(i)
 
 	task := strings.Join(os.Args[3:], " ")
 	prev := tasks[i]
@@ -123,12 +135,11 @@ func Update() {
 }
 
 func Delete() {
+	handleValidLength(2)
 	i, err := strconv.Atoi(os.Args[2])
 	handleErr(err, "invalid index")
-	if i < 0 || i >= len(tasks) {
-		err = errors.New("out of index")
-		handleErr(err, "invalid index")
-	}
+	handleOutOfLength(i)
+
 	task := tasks[i]
 	tasks = append(tasks[:i], tasks[i+1:]...)
 
