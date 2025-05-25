@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -14,33 +15,51 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const (
+	path = ".todo.json"
+)
+
 func main() {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.TimeOnly})
 	if len(os.Args) <= 1 {
-		err := errors.New("empty task")
-		handleErr(err, "invalid arguments")
+		PrintHelp()
+		return
 	}
 	home, err := os.UserHomeDir()
 	handleErr(err, "get user home")
-	path := filepath.Join(home, ".todo.json")
+	path := filepath.Join(home, path)
 	handleErr(read(path), "read tasks")
 	action := strings.ToLower(os.Args[1])
+
 	switch action {
-	case "c":
+	case "h", "help":
+		PrintHelp()
+	case "c", "create":
 		Create()
-	case "l":
+	case "l", "list":
 		GetAll()
-	case "g":
+	case "g", "get":
 		Get()
-	case "u":
+	case "u", "update":
 		Update()
-	case "d":
+	case "d", "delete":
 		Delete()
 	default:
 		err := fmt.Errorf("unknown action %s", action)
 		handleErr(err, "invalid action")
 	}
 	handleErr(write(path), "write tasks")
+}
+
+func PrintHelp() {
+	fmt.Println("Usage: todo [action] [args]")
+	fmt.Println("Actions:")
+	fmt.Println("  c, create   - Create a new task")
+	fmt.Println("  l, list     - List all tasks")
+	fmt.Println("  g, get      - Get a specific task by index")
+	fmt.Println("  u, update   - Update a specific task by index")
+	fmt.Println("  d, delete   - Delete a specific task by index")
+	fmt.Println("  h, help     - Show this help message")
 }
 
 func write(path string) error {
@@ -141,7 +160,7 @@ func Delete() {
 	handleOutOfLength(i)
 
 	task := tasks[i]
-	tasks = append(tasks[:i], tasks[i+1:]...)
+	tasks = slices.Delete(tasks, i, i+1)
 
 	log.Info().
 		Int("index", i).
