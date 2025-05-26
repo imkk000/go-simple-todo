@@ -146,9 +146,8 @@ func Update() {
 
 	task := strings.Join(os.Args[3:], " ")
 	handleEmptyInput(task)
-
 	prev := tasks[i]
-	tasks[i] = task
+	tasks[i] = strings.ReplaceAll(task, "@@", prev)
 
 	log.Info().
 		Int("index", i).
