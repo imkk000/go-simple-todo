@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -11,12 +10,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/olekukonko/tablewriter"
+	"github.com/olekukonko/tablewriter/tw"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"gopkg.in/yaml.v3"
 )
 
 const (
-	path = ".todo.json"
+	path = ".todo.yaml"
 )
 
 func main() {
@@ -63,7 +65,7 @@ func PrintHelp() {
 }
 
 func write(path string) error {
-	content, err := json.Marshal(tasks)
+	content, err := yaml.Marshal(tasks)
 	if err != nil {
 		return err
 	}
@@ -78,7 +80,7 @@ func read(path string) (err error) {
 	defer func() {
 		err = errors.Join(err, fs.Close())
 	}()
-	return json.NewDecoder(fs).Decode(&tasks)
+	return yaml.NewDecoder(fs).Decode(&tasks)
 }
 
 func handleErr(err error, msg string) {
@@ -124,9 +126,17 @@ func Create() {
 
 func GetAll() {
 	handleValidLength(1)
+	table := tablewriter.NewWriter(os.Stdout)
+	table.Configure(func(config *tablewriter.Config) {
+		config.Row.Formatting.Alignment = tw.AlignLeft
+	})
+	defer table.Close()
+
+	table.Header("ID", "Task")
 	for i, task := range tasks {
-		fmt.Println(i, task)
+		table.Append([]any{i, task})
 	}
+	table.Render()
 }
 
 func Get() {
