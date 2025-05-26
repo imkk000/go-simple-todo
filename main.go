@@ -101,11 +101,19 @@ func handleValidLength(min int) {
 	}
 }
 
+func handleEmptyInput(input string) {
+	if len(input) == 0 {
+		err := errors.New("empty task")
+		handleErr(err, "invalid input")
+	}
+}
+
 var tasks []string
 
 func Create() {
 	handleValidLength(2)
 	task := strings.Join(os.Args[2:], " ")
+	handleEmptyInput(task)
 	tasks = append(tasks, task)
 
 	log.Info().
@@ -117,10 +125,7 @@ func Create() {
 func GetAll() {
 	handleValidLength(1)
 	for i, task := range tasks {
-		log.Info().
-			Int("index", i).
-			Str("task", task).
-			Msg("list tasks")
+		fmt.Println(i, task)
 	}
 }
 
@@ -130,10 +135,7 @@ func Get() {
 	handleErr(err, "invalid index")
 	handleOutOfLength(i)
 
-	log.Info().
-		Int("index", i).
-		Str("task", tasks[i]).
-		Msg("get task")
+	fmt.Println(i, tasks[i])
 }
 
 func Update() {
@@ -143,6 +145,8 @@ func Update() {
 	handleOutOfLength(i)
 
 	task := strings.Join(os.Args[3:], " ")
+	handleEmptyInput(task)
+
 	prev := tasks[i]
 	tasks[i] = task
 
