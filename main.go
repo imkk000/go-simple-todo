@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -10,8 +11,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/olekukonko/tablewriter"
-	"github.com/olekukonko/tablewriter/tw"
+	"github.com/fatih/color"
+	"github.com/jedib0t/go-pretty/v6/table"
+	"github.com/jedib0t/go-pretty/v6/text"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/urfave/cli/v3"
@@ -33,24 +35,36 @@ func main() {
 	rootCmd := &cli.Command{
 		Version:               "0.0.1",
 		EnableShellCompletion: true,
+		Commands: []*cli.Command{
+			{
+				Name:    "list",
+				Aliases: []string{"l"},
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:    "output",
+						Aliases: []string{"o"},
+						Value:   "table",
+					},
+				},
+				Action: GetAll,
+			},
+		},
 	}
 	cmds := []struct {
-		Name   string
-		Alias  string
-		Fn     func(ctx context.Context, c *cli.Command) error
-		Before func(ctx context.Context, c *cli.Command) (context.Context, error)
+		Name  string
+		Alias string
+		Fn    func(ctx context.Context, c *cli.Command) error
 	}{
-		{"create", "c", Create, validArgs},
-		{"list", "l", GetAll, nil},
-		{"get", "g", Get, validArgs},
-		{"update", "u", Update, validArgs},
-		{"delete", "d", Delete, validArgs},
+		{"create", "c", Create},
+		{"get", "g", Get},
+		{"update", "u", Update},
+		{"delete", "d", Delete},
 	}
 	for _, cmd := range cmds {
 		rootCmd.Commands = append(rootCmd.Commands, &cli.Command{
 			Name:    cmd.Name,
 			Aliases: []string{cmd.Alias},
-			Before:  cmd.Before,
+			Before:  validArgs,
 			Action: func(ctx context.Context, c *cli.Command) error {
 				handleErr(cmd.Fn(ctx, c), "execute command")
 				handleErr(write(path), "write tasks")
@@ -135,18 +149,43 @@ func Create(ctx context.Context, c *cli.Command) error {
 }
 
 func GetAll(ctx context.Context, c *cli.Command) error {
-	table := tablewriter.NewWriter(os.Stdout)
-	table.Configure(func(config *tablewriter.Config) {
-		config.Row.Formatting.Alignment = tw.AlignLeft
-	})
-	defer table.Close()
-
-	table.Header("ID", "Task")
-	for i, task := range tasks {
-		table.Append([]any{i, task})
+	switch c.String("output") {
+	case "plain":
+		for i, task := range tasks {
+			fmt.Println(i, task)
+		}
+	case "yaml", "yml":
+		content, err := yaml.Marshal(tasks)
+		handleErr(err, "marshal yaml")
+		fmt.Println(string(content))
+	case "json":
+		content, err := json.Marshal(tasks)
+		handleErr(err, "marshal json")
+		fmt.Println(string(content))
+	case "table":
+		fallthrough
+	default:
+		tw := table.NewWriter()
+		tw.SetColumnConfigs([]table.ColumnConfig{
+			{Number: 1, Align: text.AlignLeft},
+		})
+		tw.SetStyle(table.StyleBold)
+		tw.AppendHeader(table.Row{"ID", "Task"})
+		for i, task := range tasks {
+			if i&1 == 0 {
+				tw.AppendRow(table.Row{
+					color.BlueString("%d", i),
+					color.YellowString(task),
+				})
+				continue
+			}
+			tw.AppendRow(table.Row{
+				color.GreenString("%d", i),
+				color.CyanString(task),
+			})
+		}
+		fmt.Println(tw.Render())
 	}
-	table.Render()
-
 	return nil
 }
 
@@ -169,6 +208,7 @@ func Update(ctx context.Context, c *cli.Command) error {
 
 	task := strings.Join(c.Args().Tail(), " ")
 	handleEmptyInput(task)
+
 	prev := tasks[i]
 	tasks[i] = strings.ReplaceAll(task, "@@", prev)
 
