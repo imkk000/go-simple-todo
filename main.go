@@ -33,8 +33,9 @@ func main() {
 	handleErr(read(path), "read tasks")
 
 	rootCmd := &cli.Command{
-		Version:               "0.0.1",
+		Version:               "0.0.2",
 		EnableShellCompletion: true,
+		DefaultCommand:        "list",
 		Commands: []*cli.Command{
 			{
 				Name:    "list",
