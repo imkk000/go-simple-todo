@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -8,12 +9,12 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/olekukonko/tablewriter"
 	"github.com/olekukonko/tablewriter/tw"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/urfave/cli/v3"
 	"gopkg.in/yaml.v3"
 )
 
@@ -22,46 +23,45 @@ const (
 )
 
 func main() {
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.TimeOnly})
-	if len(os.Args) <= 1 {
-		PrintHelp()
-		return
-	}
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout})
+
 	home, err := os.UserHomeDir()
 	handleErr(err, "get user home")
 	path := filepath.Join(home, path)
 	handleErr(read(path), "read tasks")
-	action := strings.ToLower(os.Args[1])
 
-	switch action {
-	case "h", "help":
-		PrintHelp()
-	case "c", "create":
-		Create()
-	case "l", "list":
-		GetAll()
-	case "g", "get":
-		Get()
-	case "u", "update":
-		Update()
-	case "d", "delete":
-		Delete()
-	default:
-		err := fmt.Errorf("unknown action %s", action)
-		handleErr(err, "invalid action")
+	rootCmd := &cli.Command{
+		Version:               "0.0.1",
+		EnableShellCompletion: true,
 	}
-	handleErr(write(path), "write tasks")
-}
+	cmds := []struct {
+		Name   string
+		Alias  string
+		Fn     func(ctx context.Context, c *cli.Command) error
+		Before func(ctx context.Context, c *cli.Command) (context.Context, error)
+	}{
+		{"create", "c", Create, validArgs},
+		{"list", "l", GetAll, nil},
+		{"get", "g", Get, validArgs},
+		{"update", "u", Update, validArgs},
+		{"delete", "d", Delete, validArgs},
+	}
+	for _, cmd := range cmds {
+		rootCmd.Commands = append(rootCmd.Commands, &cli.Command{
+			Name:    cmd.Name,
+			Aliases: []string{cmd.Alias},
+			Before:  cmd.Before,
+			Action: func(ctx context.Context, c *cli.Command) error {
+				handleErr(cmd.Fn(ctx, c), "execute command")
+				handleErr(write(path), "write tasks")
 
-func PrintHelp() {
-	fmt.Println("Usage: todo [action] [args]")
-	fmt.Println("Actions:")
-	fmt.Println("  c, create   - Create a new task")
-	fmt.Println("  l, list     - List all tasks")
-	fmt.Println("  g, get      - Get a specific task by index")
-	fmt.Println("  u, update   - Update a specific task by index")
-	fmt.Println("  d, delete   - Delete a specific task by index")
-	fmt.Println("  h, help     - Show this help message")
+				return nil
+			},
+		})
+	}
+	if err := rootCmd.Run(context.Background(), os.Args); err != nil {
+		log.Fatal().Err(err).Msg("run command")
+	}
 }
 
 func write(path string) error {
@@ -112,9 +112,17 @@ func handleEmptyInput(input string) {
 
 var tasks []string
 
-func Create() {
-	handleValidLength(2)
-	task := strings.Join(os.Args[2:], " ")
+func validArgs(ctx context.Context, c *cli.Command) (context.Context, error) {
+	if c.Args().Len() == 0 {
+		return nil, cli.Exit("invalid parameters", 1)
+	}
+	return ctx, nil
+}
+
+func Create(ctx context.Context, c *cli.Command) error {
+	defer GetAll(ctx, c)
+
+	task := strings.Join(c.Args().Slice(), " ")
 	handleEmptyInput(task)
 	tasks = append(tasks, task)
 
@@ -122,10 +130,11 @@ func Create() {
 		Int("index", len(tasks)-1).
 		Str("task", task).
 		Msg("task created")
+
+	return nil
 }
 
-func GetAll() {
-	handleValidLength(1)
+func GetAll(ctx context.Context, c *cli.Command) error {
 	table := tablewriter.NewWriter(os.Stdout)
 	table.Configure(func(config *tablewriter.Config) {
 		config.Row.Formatting.Alignment = tw.AlignLeft
@@ -137,24 +146,28 @@ func GetAll() {
 		table.Append([]any{i, task})
 	}
 	table.Render()
+
+	return nil
 }
 
-func Get() {
-	handleValidLength(2)
-	i, err := strconv.Atoi(os.Args[2])
+func Get(ctx context.Context, c *cli.Command) error {
+	i, err := strconv.Atoi(c.Args().First())
 	handleErr(err, "invalid index")
 	handleOutOfLength(i)
 
 	fmt.Println(i, tasks[i])
+
+	return nil
 }
 
-func Update() {
-	handleValidLength(2)
-	i, err := strconv.Atoi(os.Args[2])
+func Update(ctx context.Context, c *cli.Command) error {
+	defer GetAll(ctx, c)
+
+	i, err := strconv.Atoi(c.Args().First())
 	handleErr(err, "invalid index")
 	handleOutOfLength(i)
 
-	task := strings.Join(os.Args[3:], " ")
+	task := strings.Join(c.Args().Tail(), " ")
 	handleEmptyInput(task)
 	prev := tasks[i]
 	tasks[i] = strings.ReplaceAll(task, "@@", prev)
@@ -164,11 +177,14 @@ func Update() {
 		Str("from", prev).
 		Str("to", tasks[i]).
 		Msg("update task")
+
+	return nil
 }
 
-func Delete() {
-	handleValidLength(2)
-	i, err := strconv.Atoi(os.Args[2])
+func Delete(ctx context.Context, c *cli.Command) error {
+	defer GetAll(ctx, c)
+
+	i, err := strconv.Atoi(c.Args().First())
 	handleErr(err, "invalid index")
 	handleOutOfLength(i)
 
@@ -179,4 +195,6 @@ func Delete() {
 		Int("index", i).
 		Str("task", task).
 		Msg("delete task")
+
+	return nil
 }
