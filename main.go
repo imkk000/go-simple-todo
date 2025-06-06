@@ -25,7 +25,10 @@ const (
 )
 
 func main() {
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout})
+	log.Logger = log.Output(zerolog.ConsoleWriter{
+		Out:             os.Stdout,
+		FormatTimestamp: func(any) string { return "" },
+	})
 
 	home, err := os.UserHomeDir()
 	handleErr(err, "get user home")
@@ -142,9 +145,8 @@ func Create(ctx context.Context, c *cli.Command) error {
 	tasks = append(tasks, task)
 
 	log.Info().
-		Int("index", len(tasks)-1).
 		Str("task", task).
-		Msg("task created")
+		Msgf("task created %d", len(tasks)-1)
 
 	return nil
 }
@@ -195,7 +197,7 @@ func Get(ctx context.Context, c *cli.Command) error {
 	handleErr(err, "invalid index")
 	handleOutOfLength(i)
 
-	fmt.Println(i, tasks[i])
+	log.Info().Msgf("%d: %s", i, tasks[i])
 
 	return nil
 }
@@ -214,10 +216,8 @@ func Update(ctx context.Context, c *cli.Command) error {
 	tasks[i] = strings.ReplaceAll(task, "@@", prev)
 
 	log.Info().
-		Int("index", i).
-		Str("from", prev).
 		Str("to", tasks[i]).
-		Msg("update task")
+		Msgf("update task %d: %s", i, prev)
 
 	return nil
 }
@@ -233,9 +233,8 @@ func Delete(ctx context.Context, c *cli.Command) error {
 	tasks = slices.Delete(tasks, i, i+1)
 
 	log.Info().
-		Int("index", i).
 		Str("task", task).
-		Msg("delete task")
+		Msgf("delete task %d", i)
 
 	return nil
 }
